@@ -1,101 +1,55 @@
 #!/usr/bin/env zsh
-
-BIN_DIR="$HOME/.local/bin"
-VNU_BIN="$BIN_DIR/vnu"
-JAR="$HOME/.vnu/vnu.jar"
-
-if ! grep -Fq '.local/bin' ~/.zshenv 2>/dev/null; then
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshenv
-  export PATH="$BIN_DIR:$PATH"
-  echo "Added ~/.local/bin to PATH (~/.zshenv)"
-fi
-
-if [[ -f "$VNU_BIN" ]]; then
-  echo "💡 vnu is already installed"
-  exit 0
-fi
-
-if ! java -version > /dev/null 2>&1; then
-  echo "java not found. Installing via Homebrew..."
-  if ! command -v brew > /dev/null 2>&1; then
-    echo "❌ Homebrew is not installed."
-    exit 1
-  fi
-  if ! brew install --cask temurin; then
-    echo "❌ Failed to install temurin."
-    exit 1
-  fi
-  # cask インストール直後は現在のシェルの PATH に反映されないため確認する
-  if ! java -version > /dev/null 2>&1; then
-    echo "✅ Java was installed!"
-    echo "But it is not available in the current PATH."
-    echo "Please open a new terminal and re-run this script."
-    exit 0
-  fi
-fi
-
-echo "Installing vnu.jar..."
-mkdir -p ~/.vnu "$BIN_DIR"
-
-if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
-  echo "❌ Failed to download vnu.jar"
-  exit 1
-fi
-
-# インストール時に jar の Last-Modified 日付を取得して保存する
-# Nuはバージョンが常に latest 表記のため、Last-Modified ヘッダーをバージョンとして利用する
-_installed_version=$(curl -fsSLI https://github.com/validator/validator/releases/download/latest/vnu.jar \
-  | grep -i "^last-modified:" \
-  | cut -d' ' -f2- \
-  | tr -d '\r')
-if [[ -n "$_installed_version" ]]; then
-  printf '%s\n' "$_installed_version" > "$HOME/.vnu/version"
-  printf '%s\n' "$_installed_version" > "$HOME/.vnu/latest-version"
-  printf '%s\n' "$(date +%s)" > "$HOME/.vnu/latest-version.checked_at"
-fi
-
-echo "✅ vnu.jar installed"
-
-cat > "$VNU_BIN" << 'EOF'
-#!/usr/bin/env zsh
 JAR="$HOME/.vnu/vnu.jar"
 PID_FILE="$HOME/.vnu/vnu.pid"
+PORT_FILE="$HOME/.vnu/port"
 VERSION_FILE="$HOME/.vnu/version"
 LATEST_VERSION_FILE="$HOME/.vnu/latest-version"
 LATEST_CHECKED_AT_FILE="$HOME/.vnu/latest-version.checked_at"
 CACHE_TTL=3600
+DEFAULT_PORT=8888
+
+# 起動引数で使うポート。未指定時はデフォルト。
+PORT="$DEFAULT_PORT"
 
 # PIDファイルのプロセスが nu.validator として生存しているか確認する（LISTEN判定は含まない）
 _vnu_is_process_alive() {
   [[ -f "$PID_FILE" ]] || return 1
   local pid
   pid=$(<"$PID_FILE") || return 1
-  kill -0 "$pid" 2>/dev/null || { rm -f "$PID_FILE"; return 1; }
-  ps -p "$pid" -o args= 2>/dev/null | grep -Fq 'nu.validator.servlet.Main' || { rm -f "$PID_FILE"; return 1; }
+  kill -0 "$pid" 2>/dev/null || {
+    rm -f "$PID_FILE" "$PORT_FILE"
+    return 1
+  }
+  ps -p "$pid" -o args= 2>/dev/null | grep -Fq 'nu.validator.servlet.Main' || {
+    rm -f "$PID_FILE" "$PORT_FILE"
+    return 1
+  }
 }
 
-# プロセスが生存していて、かつポート 8888 で LISTEN しているか確認する
+# プロセスが生存していて、かつ記録済みポートで LISTEN しているか確認する
 _vnu_is_ready() {
   _vnu_is_process_alive || return 1
-  local pid
+  local pid port
   pid=$(<"$PID_FILE")
-  lsof -a -p "$pid" -i :8888 -sTCP:LISTEN > /dev/null 2>&1
+  port=$(<"$PORT_FILE") || return 1
+  lsof -a -p "$pid" -i :"$port" -sTCP:LISTEN > /dev/null 2>&1
 }
 
 # PIDファイルに記録されたプロセスのみを停止する
 _vnu_stop() {
   if ! _vnu_is_process_alive; then
     echo "⚠️ vnu is not running"
-    rm -f "$PID_FILE"
+    rm -f "$PID_FILE" "$PORT_FILE"
     return 1
   fi
 
-  local pid
+  local pid port
   pid=$(<"$PID_FILE")
+  port=$(<"$PORT_FILE" 2>/dev/null || echo "$DEFAULT_PORT")
 
   if kill "$pid" 2>/dev/null; then
-    echo "💤 vnu stopped (pid: $pid)"
-    rm -f "$PID_FILE"
+    echo "💤 vnu stopped (pid: $pid, port: $port)"
+    rm -f "$PID_FILE" "$PORT_FILE"
   else
     echo "❌ Failed to stop vnu (pid: $pid)"
     return 1
@@ -154,12 +108,44 @@ _vnu_check_update_async() {
   ) &
 }
 
+# ポートの妥当性チェック
+_vnu_validate_port() {
+  [[ "$1" =~ '^[0-9]+$' ]] || return 1
+  (( $1 >= 1 && $1 <= 65535 ))
+}
+
+# 引数パース
+if [[ "$1" == "--port" ]]; then
+  shift
+  if [[ -z "$1" ]]; then
+    echo "❌ Please specify a port (e.g. vnu --port 8080)"
+    exit 1
+  fi
+  PORT="$1"
+  shift
+elif [[ "$1" == --port=* ]]; then
+  PORT="${1#--port=}"
+  if [[ -z "$PORT" ]]; then
+    echo "❌ Please specify a port (e.g. vnu --port=8080)"
+    exit 1
+  fi
+  shift
+fi
+
+if [[ "$PORT" != "$DEFAULT_PORT" ]]; then
+  if ! _vnu_validate_port "$PORT"; then
+    echo "❌ Invalid port: $PORT"
+    exit 1
+  fi
+fi
+
 case "$1" in
   --help)
-    echo "Usage: vnu [option]"
+    echo "Usage: vnu [--port PORT]"
     echo ""
     echo "Options:"
-    echo "  (none)       Start vnu server and open http://localhost:8888/"
+    echo "  (none)       Start vnu server and open http://localhost:$DEFAULT_PORT/ (default port)"
+    echo "  --port PORT  Start vnu server on a specific port (e.g. vnu --port 8080)"
     echo "  --version    Show the installed vnu.jar version"
     echo "  --update     Update vnu.jar to the latest version"
     echo "  --stop       Stop the running vnu server"
@@ -192,7 +178,6 @@ case "$1" in
       echo "Updating $current → $latest"
     fi
 
-    # 起動中なら停止してからアップデート
     if _vnu_is_process_alive; then
       echo "Stopping vnu before update..."
       _vnu_stop
@@ -204,7 +189,6 @@ case "$1" in
       exit 1
     fi
 
-    # アップデート後にバージョンを保存
     if [[ -n "$latest" ]]; then
       printf '%s\n' "$latest" > "$VERSION_FILE"
       printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
@@ -227,6 +211,7 @@ case "$1" in
     rm -f \
       "$HOME/.vnu/vnu.jar" \
       "$HOME/.vnu/vnu.pid" \
+      "$HOME/.vnu/port" \
       "$HOME/.vnu/version" \
       "$HOME/.vnu/latest-version" \
       "$HOME/.vnu/latest-version.checked_at"
@@ -238,27 +223,36 @@ case "$1" in
     [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu --update"; exit 1; }
 
     if _vnu_is_ready; then
-      echo "⚠️ vnu is already running"
+      running_port=$(<"$PORT_FILE")
+      echo "⚠️ vnu is already running on port $running_port"
+      if [[ "$PORT" != "$DEFAULT_PORT" && "$PORT" != "$running_port" ]]; then
+        echo "   (--port $PORT was ignored; run 'vnu --stop' first to change the port)"
+      fi
       _vnu_check_update_async
-      open http://localhost:8888/
+      open "http://localhost:$running_port/"
       exit 0
     fi
 
-    echo "Starting..."
-    java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main 8888 &
+    if _vnu_is_process_alive; then
+      echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu --stop"
+      exit 1
+    fi
+
+    echo "Starting on port $PORT..."
+    java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main "$PORT" &
     local_pid=$!
     echo "$local_pid" > "$PID_FILE"
+    echo "$PORT" > "$PORT_FILE"
 
     for i in $(seq 1 20); do
       if _vnu_is_ready; then
         _vnu_check_update_async
-        open http://localhost:8888/
+        open "http://localhost:$PORT/"
         exit 0
       fi
       sleep 0.5
     done
 
-    # 起動タイムアウト
     _vnu_stop > /dev/null 2>&1
     echo "❌ vnu did not start within 10s"
     exit 1
@@ -270,9 +264,3 @@ case "$1" in
     exit 1
     ;;
 esac
-EOF
-
-chmod +x "$VNU_BIN"
-echo "✅ vnu command installed!"
-echo "Run: vnu"
-echo "If the command is not found, open a new terminal or run: source ~/.zshenv"
