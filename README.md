@@ -21,6 +21,9 @@ The installer performs four main tasks:
 
 - **`vnu`** — Launches the checker at http://localhost:8888 and opens it in a browser
 - **`vnu --port PORT`** — Launches the checker on a specific port (e.g. `vnu --port 9090`)
+- **`vnu check <file>`** — Validates an HTML file
+- **`vnu check --html <html>`** — Validates an HTML string
+- **`vnu check --snippet <html>`** — Validates an HTML fragment (auto-wrapped in a full document)
 - **`vnu --version`** — Displays the release date of the installed vnu.jar
 - **`vnu --update`** — Upgrades vnu.jar to the newest version
 - **`vnu --stop`** — Halts the active vnu process

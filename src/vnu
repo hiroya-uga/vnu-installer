@@ -35,6 +35,27 @@ _vnu_is_ready() {
   lsof -a -p "$pid" -i :"$port" -sTCP:LISTEN > /dev/null 2>&1
 }
 
+# サーバーを起動して LISTEN 状態になるまで待つ
+_vnu_start() {
+  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu --update"; return 1; }
+  echo "Starting on port $PORT..."
+  java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main "$PORT" &
+  local local_pid=$!
+  echo "$local_pid" > "$PID_FILE"
+  echo "$PORT" > "$PORT_FILE"
+
+  for i in $(seq 1 20); do
+    if _vnu_is_ready; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  _vnu_stop > /dev/null 2>&1
+  echo "❌ vnu did not start within 10s"
+  return 1
+}
+
 # PIDファイルに記録されたプロセスのみを停止する
 _vnu_stop() {
   if ! _vnu_is_process_alive; then
@@ -144,13 +165,16 @@ case "$1" in
     echo "Usage: vnu [--port PORT]"
     echo ""
     echo "Options:"
-    echo "  (none)       Start vnu server and open http://localhost:$DEFAULT_PORT/ (default port)"
-    echo "  --port PORT  Start vnu server on a specific port (e.g. vnu --port 8080)"
-    echo "  --version    Show the installed vnu.jar version"
-    echo "  --update     Update vnu.jar to the latest version"
-    echo "  --stop       Stop the running vnu server"
-    echo "  --uninstall  Uninstall vnu and remove all related files"
-    echo "  --help       Show this help message"
+    echo "  (none)                Start vnu server and open http://localhost:$DEFAULT_PORT/ (default port)"
+    echo "  --port PORT           Start vnu server on a specific port (e.g. vnu --port 8080)"
+    echo "  check <file>             Validate an HTML file"
+    echo "  check --html <html>      Validate an HTML string"
+    echo "  check --snippet <html>   Validate an HTML fragment (auto-wrapped in a full document)"
+    echo "  --version             Show the installed vnu.jar version"
+    echo "  --update              Update vnu.jar to the latest version"
+    echo "  --stop                Stop the running vnu server"
+    echo "  --uninstall           Uninstall vnu and remove all related files"
+    echo "  --help                Show this help message"
     ;;
 
   --version)
@@ -238,24 +262,97 @@ case "$1" in
       exit 1
     fi
 
-    echo "Starting on port $PORT..."
-    java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main "$PORT" &
-    local_pid=$!
-    echo "$local_pid" > "$PID_FILE"
-    echo "$PORT" > "$PORT_FILE"
+    _vnu_start || exit 1
+    _vnu_check_update_async
+    open "http://localhost:$PORT/"
+    ;;
 
-    for i in $(seq 1 20); do
-      if _vnu_is_ready; then
-        _vnu_check_update_async
-        open "http://localhost:$PORT/"
-        exit 0
+  check)
+    shift
+    local check_html="" check_file=""
+
+    if [[ "$1" == "--html" ]]; then
+      shift
+      if [[ -z "$1" ]]; then
+        echo "❌ Please specify HTML (e.g. vnu check --html '<p>test</p>')"
+        exit 1
       fi
-      sleep 0.5
-    done
+      check_html="$1"
+    elif [[ "$1" == --html=* ]]; then
+      check_html="${1#--html=}"
+      if [[ -z "$check_html" ]]; then
+        echo "❌ Please specify HTML (e.g. vnu check --html='<p>test</p>')"
+        exit 1
+      fi
+    elif [[ "$1" == "--snippet" ]]; then
+      shift
+      if [[ -z "$1" ]]; then
+        echo "❌ Please specify HTML snippet (e.g. vnu check --snippet '<p>test</p>')"
+        exit 1
+      fi
+      check_html="<!DOCTYPE html><html lang=\"\"><head><title>Test</title></head><body>${1}</body></html>"
+    elif [[ "$1" == --snippet=* ]]; then
+      local snippet="${1#--snippet=}"
+      if [[ -z "$snippet" ]]; then
+        echo "❌ Please specify HTML snippet (e.g. vnu check --snippet='<p>test</p>')"
+        exit 1
+      fi
+      check_html="<!DOCTYPE html><html lang=\"\"><head><title>Test</title></head><body>${snippet}</body></html>"
+    elif [[ -n "$1" ]]; then
+      check_file="$1"
+      if [[ ! -f "$check_file" ]]; then
+        echo "❌ File not found: $check_file"
+        exit 1
+      fi
+    else
+      echo "❌ Please specify a target:"
+      echo "  vnu check <file>"
+      echo "  vnu check --html '<html>'"
+      echo "  vnu check --snippet '<html>'"
+      exit 1
+    fi
 
-    _vnu_stop > /dev/null 2>&1
-    echo "❌ vnu did not start within 10s"
-    exit 1
+    if ! _vnu_is_ready; then
+      if _vnu_is_process_alive; then
+        echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu --stop"
+        exit 1
+      fi
+      printf '⚠️  vnu is not running. Start it now? [y/N] '
+      read -r _reply
+      case "$_reply" in
+        [yY]|[yY][eE][sS]) _vnu_start || exit 1 ;;
+        *) exit 1 ;;
+      esac
+    fi
+
+    local port result
+    port=$(<"$PORT_FILE")
+
+    if [[ -n "$check_file" ]]; then
+      result=$(curl -s -H "Content-Type: text/html; charset=utf-8" \
+        --data-binary @"$check_file" \
+        "http://localhost:$port/?out=text")
+    else
+      result=$(printf '%s' "$check_html" \
+        | curl -s -H "Content-Type: text/html; charset=utf-8" \
+        --data-binary @- \
+        "http://localhost:$port/?out=text")
+    fi
+
+    echo "\n----- Validation result for: ${check_file:-HTML string} -----\n"
+
+    if [[ -z "$result" ]] || [[ "$result" == *"The document validates according to the specified schema"* ]]; then
+      echo "✅ No errors found!\n"
+      exit 0
+    fi
+
+    if printf '%s' "$result" | grep -q 'Error:'; then
+      printf '%s\n' "$result"
+      echo "\n❌ Validation failed\n"
+      exit 1
+    fi
+
+    printf '%s\n' "$result"
     ;;
 
   *)
