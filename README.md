@@ -19,11 +19,14 @@ The installer performs four main tasks:
 
 ## Usage
 
-- **`vnu`** — Starts the checker on http://localhost:8888 and opens
+- **`vnu`** — Alias for `vnu start`
+- **`vnu start`** — Starts the checker on http://localhost:8888 and opens
   it in your browser
-- **`vnu serve`** — Starts the checker (explicit form of `vnu`)
-- **`vnu serve --port PORT`** — Starts the checker on a specific
-  port (e.g. `vnu serve --port 9090`)
+- **`vnu start --port <PORT>`** — Starts the checker on a specific port and
+  opens it in your browser (e.g. `vnu start --port 9090`)
+- **`vnu serve`** — Starts the checker without opening the browser
+- **`vnu serve --port <PORT>`** — Starts the checker on a specific port
+  (e.g. `vnu serve --port 9090`)
 - **`vnu check <value>`** — Auto-detection: pass a URL, `<!doctype...>` string, `<p>...</p>`, or a file path directly without flags.
 - **`vnu check --file <file>`** — Validates an HTML file
 - **`vnu check --url <url>`** — Validates a URL
