@@ -305,9 +305,7 @@ case "$1" in
       esac
     elif [[ -n "$1" ]]; then
       local value="$1"
-      if [[ "$value" == *.html || "$value" == *.htm ]]; then
-        check_file="$value"
-      elif [[ "$value" == http://* || "$value" == https://* ]]; then
+      if [[ "$value" == http://* || "$value" == https://* ]]; then
         check_url="$value"
       elif [[ "$value" == '<!DOCTYPE'* || "$value" == '<!doctype'* ]]; then
         check_html="$value"
