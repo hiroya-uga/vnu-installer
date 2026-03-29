@@ -22,9 +22,13 @@ The installer performs four main tasks:
 - **`vnu`** — Launches the checker at http://localhost:8888 and opens it in a browser
 - **`vnu serve`** — Same as above (explicit form)
 - **`vnu serve --port PORT`** — Launches the checker on a specific port (e.g. `vnu serve --port 9090`)
-- **`vnu check <file>`** — Validates an HTML file
-- **`vnu check --html <html>`** — Validates an HTML string
-- **`vnu check --snippet <html>`** — Validates an HTML fragment (auto-wrapped in a full document)
+- **`vnu check <file.html>`** — Validates an HTML file (auto-detected by `.html`/`.htm` extension)
+- **`vnu check <https://...>`** — Validates a URL (auto-detected by `https://` prefix)
+- **`vnu check '<p>...</p>'`** — Validates an HTML fragment (auto-detected by `<` prefix)
+- **`vnu check --file <file>`** — Validates a file (explicit)
+- **`vnu check --url <url>`** — Validates a URL (explicit)
+- **`vnu check --html <html>`** — Validates a full HTML string (explicit)
+- **`vnu check --snippet <html>`** — Validates an HTML fragment, auto-wrapped in a full document (explicit)
 - **`vnu stop`** — Halts the active vnu process
 - **`vnu update`** — Upgrades vnu.jar to the newest version
 - **`vnu uninstall`** — Removes vnu and associated files

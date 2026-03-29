@@ -129,6 +129,11 @@ _vnu_check_update_async() {
   ) &
 }
 
+# HTML断片をフルドキュメントでラップする
+_vnu_wrap_snippet() {
+  printf '<!DOCTYPE html><html lang=""><head><title>Test</title></head><body>%s</body></html>' "$1"
+}
+
 # ポートの妥当性チェック
 _vnu_validate_port() {
   [[ "$1" =~ '^[0-9]+$' ]] || return 1
@@ -272,46 +277,58 @@ case "$1" in
 
   check)
     shift
-    local check_html="" check_file=""
+    local check_html="" check_file="" check_url="" check_label=""
 
-    if [[ "$1" == "--html" ]]; then
-      shift
-      if [[ -z "$1" ]]; then
-        echo "❌ Please specify HTML (e.g. vnu check --html '<p>test</p>')"
+    if [[ "$1" == --* ]]; then
+      local _flag="${1%%=*}"
+      local _value
+      if [[ "$1" == *=* ]]; then
+        _value="${1#*=}"
+      else
+        shift
+        _value="$1"
+      fi
+      if [[ -z "$_value" ]]; then
+        echo "❌ Please specify a value (e.g. vnu check $_flag '<value>')"
         exit 1
       fi
-      check_html="$1"
-    elif [[ "$1" == --html=* ]]; then
-      check_html="${1#--html=}"
-      if [[ -z "$check_html" ]]; then
-        echo "❌ Please specify HTML (e.g. vnu check --html='<p>test</p>')"
-        exit 1
-      fi
-    elif [[ "$1" == "--snippet" ]]; then
-      shift
-      if [[ -z "$1" ]]; then
-        echo "❌ Please specify HTML snippet (e.g. vnu check --snippet '<p>test</p>')"
-        exit 1
-      fi
-      check_html="<!DOCTYPE html><html lang=\"\"><head><title>Test</title></head><body>${1}</body></html>"
-    elif [[ "$1" == --snippet=* ]]; then
-      local snippet="${1#--snippet=}"
-      if [[ -z "$snippet" ]]; then
-        echo "❌ Please specify HTML snippet (e.g. vnu check --snippet='<p>test</p>')"
-        exit 1
-      fi
-      check_html="<!DOCTYPE html><html lang=\"\"><head><title>Test</title></head><body>${snippet}</body></html>"
+      case "$_flag" in
+        --file)    check_file="$_value" ;;
+        --url)     check_url="$_value" ;;
+        --html)    check_html="$_value" ;;
+        --snippet) check_html=$(_vnu_wrap_snippet "$_value") ;;
+        *)
+          echo "❌ Unknown option: $_flag"
+          echo "Run 'vnu --help' for usage."
+          exit 1
+          ;;
+      esac
     elif [[ -n "$1" ]]; then
-      check_file="$1"
-      if [[ ! -f "$check_file" ]]; then
-        echo "❌ File not found: $check_file"
-        exit 1
+      local value="$1"
+      if [[ "$value" == *.html || "$value" == *.htm ]]; then
+        check_file="$value"
+      elif [[ "$value" == http://* || "$value" == https://* ]]; then
+        check_url="$value"
+      elif [[ "$value" == '<!DOCTYPE'* || "$value" == '<!doctype'* ]]; then
+        check_html="$value"
+      elif [[ "$value" == '<'* ]]; then
+        check_html=$(_vnu_wrap_snippet "$value")
+      else
+        check_file="$value"
       fi
     else
       echo "❌ Please specify a target:"
-      echo "  vnu check <file>"
+      echo "  vnu check <file.html>"
+      echo "  vnu check <https://example.com>"
+      echo "  vnu check --file <file>"
+      echo "  vnu check --url <url>"
       echo "  vnu check --html '<html>'"
-      echo "  vnu check --snippet '<html>'"
+      echo "  vnu check --snippet '<fragment>'"
+      exit 1
+    fi
+
+    if [[ -n "$check_file" && ! -f "$check_file" ]]; then
+      echo "❌ File not found: $check_file"
       exit 1
     fi
 
@@ -332,17 +349,24 @@ case "$1" in
     port=$(<"$PORT_FILE")
 
     if [[ -n "$check_file" ]]; then
+      check_label="$check_file"
       result=$(curl -s -H "Content-Type: text/html; charset=utf-8" \
         --data-binary @"$check_file" \
         "http://localhost:$port/?out=text")
+    elif [[ -n "$check_url" ]]; then
+      check_label="$check_url"
+      result=$(curl -s -G \
+        --data-urlencode "doc=$check_url" \
+        "http://localhost:$port/?out=text")
     else
+      check_label="HTML string"
       result=$(printf '%s' "$check_html" \
         | curl -s -H "Content-Type: text/html; charset=utf-8" \
         --data-binary @- \
         "http://localhost:$port/?out=text")
     fi
 
-    echo "\n----- Validation result for: ${check_file:-HTML string} -----\n"
+    echo "\n----- Validation result for: $check_label -----\n"
 
     if [[ -z "$result" ]] || [[ "$result" == *"The document validates according to the specified schema"* ]]; then
       echo "✅ No errors found!\n"
