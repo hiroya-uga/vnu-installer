@@ -147,15 +147,17 @@ case "$1" in
     echo "Commands:"
     echo "  serve                    Start vnu server (default when no command given)"
     echo "  serve --port PORT        Start vnu server on a specific port"
-    echo "  check <file>             Validate an HTML file"
-    echo "  check --html <html>      Validate an HTML string"
-    echo "  check --snippet <html>   Validate an HTML fragment (auto-wrapped in a full document)"
-    echo "  stop                     Stop the running vnu server"
+    echo "  check <value>            Validate with auto-detection (URL, <!doctype...>, <p>..., or file path)"
+    echo "  check --file <file>      Validate an HTML file"
+    echo "  check --url <url>        Validate a URL"
+    echo "  check --html <html>      Validate a full HTML string"
+    echo "  check --fragment <html>  Validate an HTML fragment (auto-wrapped in a full document)"
+    echo "  stop                     Stop the running vnu process"
     echo "  update                   Update vnu.jar to the latest version"
     echo "  uninstall                Uninstall vnu and remove all related files"
     echo ""
     echo "Options:"
-    echo "  --version             Show the installed vnu.jar version"
+    echo "  --version             Show the release date of the installed vnu.jar"
     echo "  --help                Show this help message"
     ;;
 
@@ -296,7 +298,7 @@ case "$1" in
         --file)    check_file="$_value" ;;
         --url)     check_url="$_value" ;;
         --html)    check_html="$_value" ;;
-        --snippet) check_html=$(_vnu_wrap_snippet "$_value") ;;
+        --fragment) check_html=$(_vnu_wrap_snippet "$_value") ;;
         *)
           echo "❌ Unknown option: $_flag"
           echo "Run 'vnu --help' for usage."
@@ -321,7 +323,7 @@ case "$1" in
       echo "  vnu check --file <file>"
       echo "  vnu check --url <url>"
       echo "  vnu check --html '<html>'"
-      echo "  vnu check --snippet '<fragment>'"
+      echo "  vnu check --fragment '<fragment>'"
       exit 1
     fi
 
