@@ -37,7 +37,7 @@ _vnu_is_ready() {
 
 # サーバーを起動して LISTEN 状態になるまで待つ
 _vnu_start() {
-  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu --update"; return 1; }
+  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu update"; return 1; }
   echo "Starting on port $PORT..."
   java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main "$PORT" &
   local local_pid=$!
@@ -125,7 +125,7 @@ _vnu_check_update_async() {
     [[ -z "$latest" ]] && return
     [[ "$current" == "$latest" ]] && return
 
-    echo "💡 Update available: $current → $latest  (run: vnu --update)"
+    echo "💡 Update available: $current → $latest  (run: vnu update)"
   ) &
 }
 
@@ -135,45 +135,22 @@ _vnu_validate_port() {
   (( $1 >= 1 && $1 <= 65535 ))
 }
 
-# 引数パース
-if [[ "$1" == "--port" ]]; then
-  shift
-  if [[ -z "$1" ]]; then
-    echo "❌ Please specify a port (e.g. vnu --port 8080)"
-    exit 1
-  fi
-  PORT="$1"
-  shift
-elif [[ "$1" == --port=* ]]; then
-  PORT="${1#--port=}"
-  if [[ -z "$PORT" ]]; then
-    echo "❌ Please specify a port (e.g. vnu --port=8080)"
-    exit 1
-  fi
-  shift
-fi
-
-if [[ "$PORT" != "$DEFAULT_PORT" ]]; then
-  if ! _vnu_validate_port "$PORT"; then
-    echo "❌ Invalid port: $PORT"
-    exit 1
-  fi
-fi
-
 case "$1" in
   --help)
-    echo "Usage: vnu [--port PORT]"
+    echo "Usage: vnu [command]"
     echo ""
-    echo "Options:"
-    echo "  (none)                Start vnu server and open http://localhost:$DEFAULT_PORT/ (default port)"
-    echo "  --port PORT           Start vnu server on a specific port (e.g. vnu --port 8080)"
+    echo "Commands:"
+    echo "  serve                    Start vnu server (default when no command given)"
+    echo "  serve --port PORT        Start vnu server on a specific port"
     echo "  check <file>             Validate an HTML file"
     echo "  check --html <html>      Validate an HTML string"
     echo "  check --snippet <html>   Validate an HTML fragment (auto-wrapped in a full document)"
+    echo "  stop                     Stop the running vnu server"
+    echo "  update                   Update vnu.jar to the latest version"
+    echo "  uninstall                Uninstall vnu and remove all related files"
+    echo ""
+    echo "Options:"
     echo "  --version             Show the installed vnu.jar version"
-    echo "  --update              Update vnu.jar to the latest version"
-    echo "  --stop                Stop the running vnu server"
-    echo "  --uninstall           Uninstall vnu and remove all related files"
     echo "  --help                Show this help message"
     ;;
 
@@ -187,7 +164,7 @@ case "$1" in
     _vnu_check_update_async
     ;;
 
-  --update)
+  update)
     current=$(_vnu_get_installed_version)
 
     echo "Checking for updates..."
@@ -223,11 +200,11 @@ case "$1" in
     fi
     ;;
 
-  --stop)
+  stop)
     _vnu_stop
     ;;
 
-  --uninstall)
+  uninstall)
     if _vnu_is_process_alive; then
       _vnu_stop > /dev/null 2>&1
     fi
@@ -243,14 +220,40 @@ case "$1" in
     echo "🗑️ vnu uninstalled"
     ;;
 
-  "")
-    [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu --update"; exit 1; }
+  serve|"")
+    [[ "$1" == "serve" ]] && shift
+
+    if [[ "$1" == "--port" ]]; then
+      shift
+      if [[ -z "$1" ]]; then
+        echo "❌ Please specify a port (e.g. vnu serve --port 8080)"
+        exit 1
+      fi
+      PORT="$1"
+      shift
+    elif [[ "$1" == --port=* ]]; then
+      PORT="${1#--port=}"
+      if [[ -z "$PORT" ]]; then
+        echo "❌ Please specify a port (e.g. vnu serve --port=8080)"
+        exit 1
+      fi
+      shift
+    fi
+
+    if [[ "$PORT" != "$DEFAULT_PORT" ]]; then
+      if ! _vnu_validate_port "$PORT"; then
+        echo "❌ Invalid port: $PORT"
+        exit 1
+      fi
+    fi
+
+    [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu update"; exit 1; }
 
     if _vnu_is_ready; then
       running_port=$(<"$PORT_FILE")
       echo "⚠️ vnu is already running on port $running_port"
       if [[ "$PORT" != "$DEFAULT_PORT" && "$PORT" != "$running_port" ]]; then
-        echo "   (--port $PORT was ignored; run 'vnu --stop' first to change the port)"
+        echo "   (--port $PORT was ignored; run 'vnu stop' first to change the port)"
       fi
       _vnu_check_update_async
       open "http://localhost:$running_port/"
@@ -258,7 +261,7 @@ case "$1" in
     fi
 
     if _vnu_is_process_alive; then
-      echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu --stop"
+      echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu stop"
       exit 1
     fi
 
@@ -314,7 +317,7 @@ case "$1" in
 
     if ! _vnu_is_ready; then
       if _vnu_is_process_alive; then
-        echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu --stop"
+        echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu stop"
         exit 1
       fi
       printf '⚠️  vnu is not running. Start it now? [y/N] '
