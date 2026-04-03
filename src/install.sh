@@ -1,9 +1,9 @@
 #!/usr/bin/env zsh
 
 BIN_DIR="$HOME/.local/bin"
-VNU_BIN="$BIN_DIR/vnu"
-JAR="$HOME/.vnu/vnu.jar"
-VNU_RELEASE_URL="https://github.com/hiroya-uga/vnu-installer/releases/latest/download/vnu"
+VNUX_BIN="$BIN_DIR/vnux"
+JAR="$HOME/.vnux/vnu.jar"
+VNUX_RELEASE_URL="https://github.com/hiroya-uga/vnux/releases/latest/download/vnux"
 
 if ! grep -Fq '.local/bin' ~/.zshenv 2>/dev/null; then
   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshenv
@@ -11,8 +11,8 @@ if ! grep -Fq '.local/bin' ~/.zshenv 2>/dev/null; then
   echo "Added ~/.local/bin to PATH (~/.zshenv)"
 fi
 
-if [[ -f "$VNU_BIN" ]]; then
-  echo "💡 vnu is already installed"
+if [[ -f "$VNUX_BIN" ]]; then
+  echo "💡 vnux is already installed"
   exit 0
 fi
 
@@ -36,7 +36,7 @@ if ! java -version > /dev/null 2>&1; then
 fi
 
 echo "Installing vnu.jar..."
-mkdir -p ~/.vnu "$BIN_DIR"
+mkdir -p ~/.vnux "$BIN_DIR"
 
 if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
   echo "❌ Failed to download vnu.jar"
@@ -50,20 +50,20 @@ _installed_version=$(curl -fsSLI https://github.com/validator/validator/releases
   | cut -d' ' -f2- \
   | tr -d '\r')
 if [[ -n "$_installed_version" ]]; then
-  printf '%s\n' "$_installed_version" > "$HOME/.vnu/version"
-  printf '%s\n' "$_installed_version" > "$HOME/.vnu/latest-version"
-  printf '%s\n' "$(date +%s)" > "$HOME/.vnu/latest-version.checked_at"
+  printf '%s\n' "$_installed_version" > "$HOME/.vnux/version"
+  printf '%s\n' "$_installed_version" > "$HOME/.vnux/latest-version"
+  printf '%s\n' "$(date +%s)" > "$HOME/.vnux/latest-version.checked_at"
 fi
 
 echo "✅ vnu.jar installed"
 
-echo "Installing vnu command..."
-if ! curl -fL -o "$VNU_BIN" "$VNU_RELEASE_URL"; then
-  echo "❌ Failed to download vnu command"
+echo "Installing vnux command..."
+if ! curl -fL -o "$VNUX_BIN" "$VNUX_RELEASE_URL"; then
+  echo "❌ Failed to download vnux command"
   exit 1
 fi
-chmod +x "$VNU_BIN"
+chmod +x "$VNUX_BIN"
 
-echo "✅ vnu command installed!"
-echo "Run: vnu"
+echo "✅ vnux command installed!"
+echo "Run: vnux"
 echo "If the command is not found, open a new terminal or run: source ~/.zshenv"
