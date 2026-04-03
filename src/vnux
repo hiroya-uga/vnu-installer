@@ -208,11 +208,11 @@ case "$1" in
     echo "  check --html <html>      Validate a full HTML string"
     echo "  check --fragment <html>  Validate an HTML fragment (auto-wrapped in a full document)"
     echo "  stop                     Stop the running vnu process"
-    echo "  update                   Update vnu.jar to the latest version"
+    echo "  update                   Update vnu.jar and the vnux command to the latest version"
     echo "  uninstall                Uninstall vnux and remove all related files"
     echo ""
     echo "Options:"
-    echo "  --version             Show the release date of the installed vnu.jar"
+    echo "  --version             Show the vnux version and the release date of the installed vnu.jar"
     echo "  --help                Show this help message"
     ;;
 
