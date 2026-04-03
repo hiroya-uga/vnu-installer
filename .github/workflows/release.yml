@@ -18,4 +18,4 @@ jobs:
         with:
           files: |
             src/install.sh
-            src/vnu
+            src/vnux

@@ -1,18 +1,19 @@
 #!/usr/bin/env zsh
-JAR="$HOME/.vnu/vnu.jar"
-PID_FILE="$HOME/.vnu/vnu.pid"
-PORT_FILE="$HOME/.vnu/port"
-VERSION_FILE="$HOME/.vnu/version"
-LATEST_VERSION_FILE="$HOME/.vnu/latest-version"
-LATEST_CHECKED_AT_FILE="$HOME/.vnu/latest-version.checked_at"
+JAR="$HOME/.vnux/vnu.jar"
+PID_FILE="$HOME/.vnux/vnux.pid"
+PORT_FILE="$HOME/.vnux/port"
+VERSION_FILE="$HOME/.vnux/version"
+LATEST_VERSION_FILE="$HOME/.vnux/latest-version"
+LATEST_CHECKED_AT_FILE="$HOME/.vnux/latest-version.checked_at"
 CACHE_TTL=3600
 DEFAULT_PORT=8888
+VNUX_VERSION="2.0.0"
 
 # 起動引数で使うポート。未指定時はデフォルト。
 PORT="$DEFAULT_PORT"
 
 # PIDファイルのプロセスが nu.validator として生存しているか確認する（LISTEN判定は含まない）
-_vnu_is_process_alive() {
+_vnux_is_process_alive() {
   [[ -f "$PID_FILE" ]] || return 1
   local pid
   pid=$(<"$PID_FILE") || return 1
@@ -27,8 +28,8 @@ _vnu_is_process_alive() {
 }
 
 # プロセスが生存していて、かつ記録済みポートで LISTEN しているか確認する
-_vnu_is_ready() {
-  _vnu_is_process_alive || return 1
+_vnux_is_ready() {
+  _vnux_is_process_alive || return 1
   local pid port
   pid=$(<"$PID_FILE")
   port=$(<"$PORT_FILE") || return 1
@@ -36,8 +37,8 @@ _vnu_is_ready() {
 }
 
 # サーバーを起動して LISTEN 状態になるまで待つ
-_vnu_start() {
-  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu update"; return 1; }
+_vnux_start() {
+  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnux update"; return 1; }
   echo "Starting on port $PORT..."
   java -Dnu.validator.servlet.bind-address=127.0.0.1 -cp "$JAR" nu.validator.servlet.Main "$PORT" &
   local local_pid=$!
@@ -45,21 +46,21 @@ _vnu_start() {
   echo "$PORT" > "$PORT_FILE"
 
   for i in $(seq 1 20); do
-    if _vnu_is_ready; then
+    if _vnux_is_ready; then
       return 0
     fi
     sleep 0.5
   done
 
-  _vnu_stop > /dev/null 2>&1
-  echo "❌ vnu did not start within 10s"
+  _vnux_stop > /dev/null 2>&1
+  echo "❌ vnux did not start within 10s"
   return 1
 }
 
 # PIDファイルに記録されたプロセスのみを停止する
-_vnu_stop() {
-  if ! _vnu_is_process_alive; then
-    echo "⚠️ vnu is not running"
+_vnux_stop() {
+  if ! _vnux_is_process_alive; then
+    echo "⚠️ vnux is not running"
     rm -f "$PID_FILE" "$PORT_FILE"
     return 1
   fi
@@ -69,16 +70,16 @@ _vnu_stop() {
   port=$(<"$PORT_FILE" 2>/dev/null || echo "$DEFAULT_PORT")
 
   if kill "$pid" 2>/dev/null; then
-    echo "💤 vnu stopped (pid: $pid, port: $port)"
+    echo "💤 vnux stopped (pid: $pid, port: $port)"
     rm -f "$PID_FILE" "$PORT_FILE"
   else
-    echo "❌ Failed to stop vnu (pid: $pid)"
+    echo "❌ Failed to stop vnux (pid: $pid)"
     return 1
   fi
 }
 
 # キャッシュが有効か確認
-_vnu_is_latest_cache_enabled() {
+_vnux_is_latest_cache_enabled() {
   [[ -f "$LATEST_VERSION_FILE" && -f "$LATEST_CHECKED_AT_FILE" ]] || return 1
   local checked_at now
   checked_at=$(<"$LATEST_CHECKED_AT_FILE") || return 1
@@ -88,8 +89,8 @@ _vnu_is_latest_cache_enabled() {
 
 # jar の Last-Modified ヘッダーから日付を取得する
 # 取得失敗時は空文字を返す（呼び出し側で警告を出す）
-_vnu_get_last_modified_as_version() {
-  if _vnu_is_latest_cache_enabled; then
+_vnux_get_last_modified_as_version() {
+  if _vnux_is_latest_cache_enabled; then
     cat "$LATEST_VERSION_FILE"
     return 0
   fi
@@ -110,38 +111,38 @@ _vnu_get_last_modified_as_version() {
 }
 
 # バージョンを返す
-_vnu_get_installed_version() {
+_vnux_get_installed_version() {
   [[ -f "$VERSION_FILE" ]] && cat "$VERSION_FILE" || echo "(unknown)"
 }
 
 # 起動時にバックグラウンドでアップデートチェックを行う
-_vnu_check_update_async() {
+_vnux_check_update_async() {
   (
     local current latest
-    current=$(_vnu_get_installed_version)
+    current=$(_vnux_get_installed_version)
     [[ "$current" == "(unknown)" ]] && return
 
-    latest=$(_vnu_get_last_modified_as_version 2>/dev/null) || return
+    latest=$(_vnux_get_last_modified_as_version 2>/dev/null) || return
     [[ -z "$latest" ]] && return
     [[ "$current" == "$latest" ]] && return
 
-    echo "💡 Update available: $current → $latest  (run: vnu update)"
+    echo "💡 Update available: $current → $latest  (run: vnux update)"
   ) &
 }
 
 # HTML断片をフルドキュメントでラップする
-_vnu_wrap_snippet() {
+_vnux_wrap_snippet() {
   printf '<!DOCTYPE html><html lang=""><head><title>Test</title></head><body>%s</body></html>' "$1"
 }
 
 # ポートの妥当性チェック
-_vnu_validate_port() {
+_vnux_validate_port() {
   [[ "$1" =~ '^[0-9]+$' ]] || return 1
   (( $1 >= 1 && $1 <= 65535 ))
 }
 
 # サーバー起動の共通処理。open_browser=true のときブラウザを開く
-_vnu_run_server() {
+_vnux_run_server() {
   local open_browser="$1"
   shift
 
@@ -163,38 +164,38 @@ _vnu_run_server() {
   fi
 
   if [[ "$PORT" != "$DEFAULT_PORT" ]]; then
-    if ! _vnu_validate_port "$PORT"; then
+    if ! _vnux_validate_port "$PORT"; then
       echo "❌ Invalid port: $PORT"
       exit 1
     fi
   fi
 
-  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnu update"; exit 1; }
+  [[ -f "$JAR" ]] || { echo "vnu.jar not found. Run: vnux update"; exit 1; }
 
-  if _vnu_is_ready; then
+  if _vnux_is_ready; then
     running_port=$(<"$PORT_FILE")
-    echo "⚠️ vnu is already running on port $running_port"
+    echo "⚠️ vnux is already running on port $running_port"
     if [[ "$PORT" != "$DEFAULT_PORT" && "$PORT" != "$running_port" ]]; then
-      echo "   (--port $PORT was ignored; run 'vnu stop' first to change the port)"
+      echo "   (--port $PORT was ignored; run 'vnux stop' first to change the port)"
     fi
-    _vnu_check_update_async
+    _vnux_check_update_async
     [[ "$open_browser" == true ]] && open "http://localhost:$running_port/"
     exit 0
   fi
 
-  if _vnu_is_process_alive; then
-    echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu stop"
+  if _vnux_is_process_alive; then
+    echo "⚠️ vnux process is running but not ready yet. Please wait or run: vnux stop"
     exit 1
   fi
 
-  _vnu_start || exit 1
-  _vnu_check_update_async
+  _vnux_start || exit 1
+  _vnux_check_update_async
   [[ "$open_browser" == true ]] && open "http://localhost:$PORT/"
 }
 
 case "$1" in
   --help)
-    echo "Usage: vnu [command]"
+    echo "Usage: vnux [command]"
     echo ""
     echo "Commands:"
     echo "  start                    Start vnu server and open in browser (default)"
@@ -207,92 +208,103 @@ case "$1" in
     echo "  check --html <html>      Validate a full HTML string"
     echo "  check --fragment <html>  Validate an HTML fragment (auto-wrapped in a full document)"
     echo "  stop                     Stop the running vnu process"
-    echo "  update                   Update vnu.jar to the latest version"
-    echo "  uninstall                Uninstall vnu and remove all related files"
+    echo "  update                   Update vnu.jar and the vnux command to the latest version"
+    echo "  uninstall                Uninstall vnux and remove all related files"
     echo ""
     echo "Options:"
-    echo "  --version             Show the release date of the installed vnu.jar"
+    echo "  --version             Show the vnux version and the release date of the installed vnu.jar"
     echo "  --help                Show this help message"
     ;;
 
   --version)
-    ver=$(_vnu_get_installed_version)
+    ver=$(_vnux_get_installed_version)
     if [[ "$ver" == "(unknown)" ]]; then
-      echo "vnu (unknown)"
+      echo "vnux $VNUX_VERSION (vnu.jar: unknown)"
     else
-      echo "vnu latest at $(echo "$ver" | awk '{print $2, $3, $4}')"
+      echo "vnux $VNUX_VERSION (vnu.jar: $(echo "$ver" | awk '{print $2, $3, $4}'))"
     fi
-    _vnu_check_update_async
+    _vnux_check_update_async
     ;;
 
   update)
-    current=$(_vnu_get_installed_version)
+    current=$(_vnux_get_installed_version)
 
     echo "Checking for updates..."
-    latest=$(_vnu_get_last_modified_as_version 2>/dev/null)
+    latest=$(_vnux_get_last_modified_as_version 2>/dev/null)
 
     if [[ -z "$latest" ]]; then
       echo "⚠️ Failed to fetch the latest version. Proceeding with update anyway..."
     elif [[ "$current" == "$latest" ]]; then
-      echo "✅ vnu is already up to date ($current)"
-      exit 0
+      echo "✅ vnu.jar is already up to date ($current)"
     else
-      echo "Updating $current → $latest"
+      echo "Updating vnu.jar: $current → $latest"
     fi
 
-    if _vnu_is_process_alive; then
-      echo "Stopping vnu before update..."
-      _vnu_stop
+    if [[ "$current" != "$latest" || -z "$latest" ]]; then
+      if _vnux_is_process_alive; then
+        echo "Stopping vnux before update..."
+        _vnux_stop
+      fi
+
+      mkdir -p "$HOME/.vnux"
+      if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
+        echo "❌ Failed to download vnu.jar"
+        exit 1
+      fi
+
+      if [[ -n "$latest" ]]; then
+        printf '%s\n' "$latest" > "$VERSION_FILE"
+        printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
+        printf '%s\n' "$(date +%s)" > "$LATEST_CHECKED_AT_FILE"
+        echo "✅ vnu.jar updated to $latest"
+      else
+        echo "✅ vnu.jar updated"
+      fi
     fi
 
-    mkdir -p "$HOME/.vnu"
-    if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
-      echo "❌ Failed to download vnu.jar"
-      exit 1
-    fi
-
-    if [[ -n "$latest" ]]; then
-      printf '%s\n' "$latest" > "$VERSION_FILE"
-      printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
-      printf '%s\n' "$(date +%s)" > "$LATEST_CHECKED_AT_FILE"
-      echo "✅ vnu updated to $latest"
+    local vnux_bin="$HOME/.local/bin/vnux"
+    if curl -fL -o "${vnux_bin}.tmp" "https://github.com/hiroya-uga/vnux/releases/latest/download/vnux" 2>/dev/null; then
+      mv "${vnux_bin}.tmp" "$vnux_bin"
+      chmod +x "$vnux_bin"
+      echo "✅ vnux command updated"
     else
-      echo "✅ vnu updated"
+      rm -f "${vnux_bin}.tmp"
+      echo "⚠️ Failed to update vnux command — skipping"
     fi
     ;;
 
   stop)
-    _vnu_stop
+    _vnux_stop
     ;;
 
   uninstall)
-    if _vnu_is_process_alive; then
-      _vnu_stop > /dev/null 2>&1
+    if _vnux_is_process_alive; then
+      _vnux_stop > /dev/null 2>&1
     fi
-    rm -f "$HOME/.local/bin/vnu"
+    rm -f "$HOME/.local/bin/vnux"
     rm -f \
-      "$HOME/.vnu/vnu.jar" \
-      "$HOME/.vnu/vnu.pid" \
-      "$HOME/.vnu/port" \
-      "$HOME/.vnu/version" \
-      "$HOME/.vnu/latest-version" \
-      "$HOME/.vnu/latest-version.checked_at"
-    rmdir "$HOME/.vnu" 2>/dev/null
-    echo "🗑️ vnu uninstalled"
+      "$HOME/.vnux/vnu.jar" \
+      "$HOME/.vnux/vnux.pid" \
+      "$HOME/.vnux/port" \
+      "$HOME/.vnux/version" \
+      "$HOME/.vnux/latest-version" \
+      "$HOME/.vnux/latest-version.checked_at"
+    rmdir "$HOME/.vnux" 2>/dev/null
+    echo "🗑️ vnux uninstalled"
     ;;
 
   "")
-    _vnu_run_server true
+    _vnux_run_server true
     ;;
 
   start)
     shift
-    _vnu_run_server true "$@"
+    _vnux_run_server true "$@"
     ;;
 
   serve)
     shift
-    _vnu_run_server false "$@"
+    _vnux_run_server false "$@"
     ;;
 
   check)
@@ -309,17 +321,17 @@ case "$1" in
         _value="$1"
       fi
       if [[ -z "$_value" ]]; then
-        echo "❌ Please specify a value (e.g. vnu check $_flag '<value>')"
+        echo "❌ Please specify a value (e.g. vnux check $_flag '<value>')"
         exit 1
       fi
       case "$_flag" in
         --file)    check_file="$_value" ;;
         --url)     check_url="$_value" ;;
         --html)    check_html="$_value" ;;
-        --fragment) check_html=$(_vnu_wrap_snippet "$_value") ;;
+        --fragment) check_html=$(_vnux_wrap_snippet "$_value") ;;
         *)
           echo "❌ Unknown option: $_flag"
-          echo "Run 'vnu --help' for usage."
+          echo "Run 'vnux --help' for usage."
           exit 1
           ;;
       esac
@@ -330,18 +342,18 @@ case "$1" in
       elif [[ "$value" == '<!DOCTYPE'* || "$value" == '<!doctype'* ]]; then
         check_html="$value"
       elif [[ "$value" == '<'* ]]; then
-        check_html=$(_vnu_wrap_snippet "$value")
+        check_html=$(_vnux_wrap_snippet "$value")
       else
         check_file="$value"
       fi
     else
       echo "❌ Please specify a target:"
-      echo "  vnu check <file.html>"
-      echo "  vnu check <https://example.com>"
-      echo "  vnu check --file <file>"
-      echo "  vnu check --url <url>"
-      echo "  vnu check --html '<html>'"
-      echo "  vnu check --fragment '<fragment>'"
+      echo "  vnux check <file.html>"
+      echo "  vnux check <https://example.com>"
+      echo "  vnux check --file <file>"
+      echo "  vnux check --url <url>"
+      echo "  vnux check --html '<html>'"
+      echo "  vnux check --fragment '<fragment>'"
       exit 1
     fi
 
@@ -350,15 +362,15 @@ case "$1" in
       exit 1
     fi
 
-    if ! _vnu_is_ready; then
-      if _vnu_is_process_alive; then
-        echo "⚠️ vnu process is running but not ready yet. Please wait or run: vnu stop"
+    if ! _vnux_is_ready; then
+      if _vnux_is_process_alive; then
+        echo "⚠️ vnux process is running but not ready yet. Please wait or run: vnux stop"
         exit 1
       fi
-      printf '⚠️  vnu is not running. Start it now? [y/N] '
+      printf '⚠️  vnux is not running. Start it now? [y/N] '
       read -r _reply
       case "$_reply" in
-        [yY]|[yY][eE][sS]) _vnu_start || exit 1 ;;
+        [yY]|[yY][eE][sS]) _vnux_start || exit 1 ;;
         *) exit 1 ;;
       esac
     fi
@@ -402,7 +414,7 @@ case "$1" in
 
   *)
     echo "Unknown option: $1"
-    echo "Run 'vnu --help' for usage."
+    echo "Run 'vnux --help' for usage."
     exit 1
     ;;
 esac
