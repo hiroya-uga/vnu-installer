@@ -235,30 +235,31 @@ case "$1" in
     if [[ -z "$latest" ]]; then
       echo "⚠️ Failed to fetch the latest version. Proceeding with update anyway..."
     elif [[ "$current" == "$latest" ]]; then
-      echo "✅ vnux is already up to date ($current)"
-      exit 0
+      echo "✅ vnu.jar is already up to date ($current)"
     else
-      echo "Updating $current → $latest"
+      echo "Updating vnu.jar: $current → $latest"
     fi
 
-    if _vnux_is_process_alive; then
-      echo "Stopping vnux before update..."
-      _vnux_stop
-    fi
+    if [[ "$current" != "$latest" || -z "$latest" ]]; then
+      if _vnux_is_process_alive; then
+        echo "Stopping vnux before update..."
+        _vnux_stop
+      fi
 
-    mkdir -p "$HOME/.vnux"
-    if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
-      echo "❌ Failed to download vnu.jar"
-      exit 1
-    fi
+      mkdir -p "$HOME/.vnux"
+      if ! curl -fL -o "$JAR" https://github.com/validator/validator/releases/download/latest/vnu.jar; then
+        echo "❌ Failed to download vnu.jar"
+        exit 1
+      fi
 
-    if [[ -n "$latest" ]]; then
-      printf '%s\n' "$latest" > "$VERSION_FILE"
-      printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
-      printf '%s\n' "$(date +%s)" > "$LATEST_CHECKED_AT_FILE"
-      echo "✅ vnu.jar updated to $latest"
-    else
-      echo "✅ vnu.jar updated"
+      if [[ -n "$latest" ]]; then
+        printf '%s\n' "$latest" > "$VERSION_FILE"
+        printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
+        printf '%s\n' "$(date +%s)" > "$LATEST_CHECKED_AT_FILE"
+        echo "✅ vnu.jar updated to $latest"
+      else
+        echo "✅ vnu.jar updated"
+      fi
     fi
 
     local vnux_bin="$HOME/.local/bin/vnux"
