@@ -255,9 +255,19 @@ case "$1" in
       printf '%s\n' "$latest" > "$VERSION_FILE"
       printf '%s\n' "$latest" > "$LATEST_VERSION_FILE"
       printf '%s\n' "$(date +%s)" > "$LATEST_CHECKED_AT_FILE"
-      echo "✅ vnux updated to $latest"
+      echo "✅ vnu.jar updated to $latest"
     else
-      echo "✅ vnux updated"
+      echo "✅ vnu.jar updated"
+    fi
+
+    local vnux_bin="$HOME/.local/bin/vnux"
+    if curl -fL -o "${vnux_bin}.tmp" "https://github.com/hiroya-uga/vnux/releases/latest/download/vnux" 2>/dev/null; then
+      mv "${vnux_bin}.tmp" "$vnux_bin"
+      chmod +x "$vnux_bin"
+      echo "✅ vnux command updated"
+    else
+      rm -f "${vnux_bin}.tmp"
+      echo "⚠️ Failed to update vnux command — skipping"
     fi
     ;;
 

@@ -20,12 +20,12 @@ The installer performs four main tasks:
 ## Usage
 
 - **`vnux`** — Alias for `vnux start`
-- **`vnux start`** — Starts the checker on http://localhost:8888 and opens
+- **`vnux start`** — Starts the vnu server on http://localhost:8888 and opens
   it in your browser
-- **`vnux start --port <PORT>`** — Starts the checker on a specific port and
+- **`vnux start --port <PORT>`** — Starts the vnu server on a specific port and
   opens it in your browser (e.g. `vnux start --port 9090`)
-- **`vnux serve`** — Starts the checker without opening the browser
-- **`vnux serve --port <PORT>`** — Starts the checker on a specific port
+- **`vnux serve`** — Starts the vnu server without opening the browser
+- **`vnux serve --port <PORT>`** — Starts the vnu server on a specific port
   (e.g. `vnux serve --port 9090`)
 - **`vnux check <value>`** — Auto-detection: pass a URL, `<!doctype...>` string, `<p>...</p>`, or a file path directly without flags.
 - **`vnux check --file <file>`** — Validates an HTML file
@@ -34,7 +34,7 @@ The installer performs four main tasks:
 - **`vnux check --fragment '<p>...</p>'`** — Validates an HTML
   fragment (auto-wrapped in a full document)
 - **`vnux stop`** — Stops the running vnu process
-- **`vnux update`** — Updates vnu.jar to the latest version
+- **`vnux update`** — Updates vnu.jar and the vnux command to the latest version
 - **`vnux uninstall`** — Removes vnux and related files
 - **`vnux --version`** — Shows the release date of the installed vnu.jar
 - **`vnux --help`** — Shows usage information
