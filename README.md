@@ -36,5 +36,5 @@ The installer performs four main tasks:
 - **`vnux stop`** — Stops the running vnu process
 - **`vnux update`** — Updates vnu.jar and the vnux command to the latest version
 - **`vnux uninstall`** — Removes vnux and related files
-- **`vnux --version`** — Shows the release date of the installed vnu.jar
+- **`vnux --version`** — Shows the vnux version and the release date of the installed vnu.jar
 - **`vnux --help`** — Shows usage information

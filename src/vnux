@@ -7,6 +7,7 @@ LATEST_VERSION_FILE="$HOME/.vnux/latest-version"
 LATEST_CHECKED_AT_FILE="$HOME/.vnux/latest-version.checked_at"
 CACHE_TTL=3600
 DEFAULT_PORT=8888
+VNUX_VERSION="2.0.0"
 
 # 起動引数で使うポート。未指定時はデフォルト。
 PORT="$DEFAULT_PORT"
@@ -218,9 +219,9 @@ case "$1" in
   --version)
     ver=$(_vnux_get_installed_version)
     if [[ "$ver" == "(unknown)" ]]; then
-      echo "vnux (unknown)"
+      echo "vnux $VNUX_VERSION (vnu.jar: unknown)"
     else
-      echo "vnux latest at $(echo "$ver" | awk '{print $2, $3, $4}')"
+      echo "vnux $VNUX_VERSION (vnu.jar: $(echo "$ver" | awk '{print $2, $3, $4}'))"
     fi
     _vnux_check_update_async
     ;;
